@@ -43,7 +43,9 @@ export default function ClientePage() {
     const [notas, setNotas] = useState('');
     const [pedidoActual, setPedidoActual] = useState<Pedido | null>(null);
     const [loading, setLoading] = useState(false);
-    const [forma, setForma] = useState({ nombre: '', cumpleanos: '', bebidaFavorita: '' });
+    const [forma, setForma] = useState({ nombre: '', bebidaFavorita: '' });
+    const [rawDate, setRawDate] = useState(''); // YYYY-MM-DD para el date picker
+    const [cumpleanos, setCumpleanos] = useState(''); // DD/MM/YYYY guardado
 
     // Buscar cliente por teléfono
     async function buscarCliente() {
@@ -71,14 +73,14 @@ export default function ClientePage() {
             const res = await fetch('/api/clientes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...forma, telefono }),
+                body: JSON.stringify({ ...forma, cumpleanos, telefono }),
             });
             const data = await res.json();
             if (data.ok) {
                 setCliente({
                     nombre: forma.nombre, telefono,
                     signo: data.signo, bebidaFavorita: forma.bebidaFavorita,
-                    cumpleanos: forma.cumpleanos, visitas: 1,
+                    cumpleanos, visitas: 1,
                     ultimaVisita: new Date().toLocaleDateString('es-MX'),
                     totalGastado: 0, puntos: 0, nivel: 'BASE',
                 });
@@ -108,12 +110,15 @@ export default function ClientePage() {
                 const p = menu.find(m => m.nombre === nombre);
                 return sum + (p?.precio || 0) * q;
             }, 0);
+            // Fecha local del cliente (browser sabe la zona horaria correcta)
+            const fechaLocal = new Date().toLocaleDateString('es-MX');
             const res = await fetch('/api/pedidos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     nombre: cliente.nombre, telefono: cliente.telefono,
-                    nivel: cliente.nivel, productos, totalEstimado: total, notas,
+                    nivel: cliente.nivel, productos, totalEstimado: total,
+                    notas, fecha: fechaLocal,
                 }),
             });
             const data = await res.json();
@@ -183,13 +188,21 @@ export default function ClientePage() {
                         className="w-full bg-zinc-700 border border-zinc-600 rounded-lg px-4 py-3 focus:outline-none focus:border-amber-400" />
                     <div>
                         <label className="text-xs text-zinc-400 mb-1 block">Fecha de cumpleaños</label>
-                        <input type="date" value={forma.cumpleanos}
+                        <input
+                            type="date"
+                            value={rawDate}
                             onChange={e => {
-                                // Convertir YYYY-MM-DD a DD/MM/YYYY
-                                const [y, m, d] = e.target.value.split('-');
-                                setForma(f => ({ ...f, cumpleanos: `${d}/${m}/${y}` }));
+                                const val = e.target.value; // YYYY-MM-DD
+                                setRawDate(val);
+                                if (val) {
+                                    const [y, m, d] = val.split('-');
+                                    setCumpleanos(`${d}/${m}/${y}`);
+                                } else {
+                                    setCumpleanos('');
+                                }
                             }}
-                            className="w-full bg-zinc-700 border border-zinc-600 rounded-lg px-4 py-3 focus:outline-none focus:border-amber-400" />
+                            className="w-full bg-zinc-700 border border-zinc-600 rounded-lg px-4 py-3 focus:outline-none focus:border-amber-400 text-white" />
+                        {cumpleanos && <p className="text-xs text-zinc-400 mt-1">📅 {cumpleanos}</p>}
                     </div>
                     <input placeholder="Bebida favorita (opcional)" value={forma.bebidaFavorita}
                         onChange={e => setForma(f => ({ ...f, bebidaFavorita: e.target.value }))}
