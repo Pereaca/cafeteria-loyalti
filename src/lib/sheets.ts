@@ -137,7 +137,14 @@ export async function getClientes(): Promise<Cliente[]> {
     const rows = data.values || [];
     return rows
         .map((row: string[], i: number) => rowToCliente(row, i + 2))
-        .filter((c: Cliente) => c.telefono && c.nombre);
+        .filter((c: Cliente) => {
+            // Excluir filas vacías, headers y notas del sheet
+            if (!c.telefono || !c.nombre) return false;
+            if (c.telefono === 'Telefono') return false;
+            if (c.nombre.startsWith('Se actualiza') || c.nombre.startsWith('NOTA') || c.nombre.startsWith('Sin datos')) return false;
+            // Teléfono debe ser numérico de al menos 7 dígitos
+            return c.telefono.replace(/\D/g, '').length >= 7;
+        });
 }
 
 export async function getClienteByTel(telefono: string): Promise<Cliente | null> {
@@ -186,13 +193,15 @@ export async function crearPedido(data: Omit<Pedido, 'fila'>) {
 export async function actualizarEstadoPedido(fila: number, estado: 'Preparando' | 'Listo') {
     const now = new Date().toISOString();
     if (estado === 'Preparando') {
-        await sheetsUpdate(`Pedidos!G${fila}:I${fila}`, [['Preparando', '', now]]);
+        // Solo actualizar Estado (G) y T.Preparando (I) — NO tocar T.Enviado (H)
+        await sheetsUpdate(`Pedidos!G${fila}`, [['Preparando']]);
+        await sheetsUpdate(`Pedidos!I${fila}`, [[now]]);
     } else {
-        // Calcular tiempos
+        // Leer fila completa para calcular tiempos
         const data = await sheetsGet(`Pedidos!A${fila}:O${fila}`);
         const row = data.values?.[0] || [];
-        const tEnviado = new Date(row[7]);
-        const tPreparando = new Date(row[8]);
+        const tEnviado = new Date(row[7]);   // col H
+        const tPreparando = new Date(row[8]); // col I
         const tListo = new Date(now);
         const minEspera = ((tPreparando.getTime() - tEnviado.getTime()) / 60000).toFixed(1);
         const minPrep = ((tListo.getTime() - tPreparando.getTime()) / 60000).toFixed(1);
