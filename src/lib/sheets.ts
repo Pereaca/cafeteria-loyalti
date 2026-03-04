@@ -209,8 +209,21 @@ export async function actualizarEstadoPedido(fila: number, estado: 'Preparando' 
         await sheetsUpdate(`Pedidos!G${fila}:M${fila}`, [[
             'Listo', row[7], row[8], now, minEspera, minPrep, minTotal,
         ]]);
+
+        // ── Escribir en Registros para que Flujo 10 actualice Clientes ──
+        // Estructura: Fecha | Nombre | Telefono | Tipo Cliente | Productos | Total ($)
+        const fecha = new Date().toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' });
+        const nombre = row[1] || '';
+        const telefono = row[2] || '';
+        const nivel = row[3] || 'BASE';
+        const productos = row[4] || '';
+        const total = row[5] || '0';
+        await sheetsAppend('Registros!A:I', [[
+            fecha, nombre, telefono, nivel, productos, total, '', '', '',
+        ]]);
     }
 }
+
 
 export async function getMenu(): Promise<Producto[]> {
     const data = await sheetsGet('Menu!A2:C');
