@@ -70,7 +70,9 @@ export default function DuenoPage() {
 
     const fetchData = useCallback(async () => {
         try {
-            const res = await fetch('/api/dueno');
+            // Pasar fecha de hoy desde el browser (timezone correcto del cliente)
+            const today = new Date().toLocaleDateString('es-MX');
+            const res = await fetch(`/api/dueno?today=${encodeURIComponent(today)}`);
             if (!res.ok) throw new Error('Error al cargar datos');
             const json = await res.json();
             if (json.error) throw new Error(json.error);

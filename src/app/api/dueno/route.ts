@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
 import { getPedidos, getClientes } from '@/lib/sheets';
 
-export async function GET() {
+export async function GET(req: Request) {
     try {
+        const { searchParams } = new URL(req.url);
+        // Usar fecha del cliente para comparar "hoy"; fallback al servidor
+        const hoy = searchParams.get('today') || new Date().toLocaleDateString('es-MX');
+
         const [todosLosPedidos, clientes] = await Promise.all([
             getPedidos(false), // todos, incluyendo Listo
             getClientes(),
         ]);
 
-        const hoy = new Date().toLocaleDateString('es-MX');
+
 
         // ── Pedidos de hoy ──────────────────────────────────────────
         const pedidosHoy = todosLosPedidos.filter(p => p.fecha === hoy && p.estado === 'Listo');
