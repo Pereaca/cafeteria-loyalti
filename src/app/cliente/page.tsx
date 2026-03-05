@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { LoyaltyCard } from '@/components/ui/loyalty-card';
 
 type Cliente = {
     nombre: string;
@@ -20,12 +20,6 @@ type Cliente = {
 
 type Producto = { nombre: string; categoria: string; precio: number };
 type Pedido = { id: string; estado: string; productos: string; tEnviado: string };
-
-const NIVEL_COLORS: Record<string, string> = {
-    TOP: 'bg-gradient-to-r from-amber-400 to-orange-500 text-black',
-    MEDIO: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white',
-    BASE: 'bg-gradient-to-r from-zinc-600 to-zinc-700 text-white',
-};
 
 const SIGNO_EMOJI: Record<string, string> = {
     'Aries': '♈', 'Tauro': '♉', 'Géminis': '♊', 'Cáncer': '♋', 'Leo': '♌', 'Virgo': '♍',
@@ -239,49 +233,33 @@ export default function ClientePage() {
     );
 
     if (screen === 'perfil' && cliente) return (
-        <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 p-4">
-            <div className="max-w-sm mx-auto space-y-4">
-                {/* Perfil header */}
-                <Card className="p-6 bg-zinc-800/80 border-zinc-700 text-white">
-                    <div className="flex items-start justify-between mb-4">
-                        <div>
-                            <h2 className="text-xl font-bold">Hola, {cliente.nombre.split(' ')[0]}! 👋</h2>
-                            <p className="text-zinc-400 text-sm">{SIGNO_EMOJI[cliente.signo]} {cliente.signo}</p>
-                        </div>
-                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${NIVEL_COLORS[cliente.nivel]}`}>
-                            {cliente.nivel === 'TOP' ? '🏆' : cliente.nivel === 'MEDIO' ? '⭐' : '🔵'} {cliente.nivel}
-                        </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3 text-center">
-                        <div className="bg-zinc-700/50 rounded-lg p-3">
-                            <div className="text-xl font-bold text-amber-400">{cliente.puntos}</div>
-                            <div className="text-xs text-zinc-400">Puntos</div>
-                        </div>
-                        <div className="bg-zinc-700/50 rounded-lg p-3">
-                            <div className="text-xl font-bold text-blue-400">{cliente.visitas}</div>
-                            <div className="text-xs text-zinc-400">Visitas</div>
-                        </div>
-                        <div className="bg-zinc-700/50 rounded-lg p-3">
-                            <div className="text-xl font-bold text-green-400">${cliente.totalGastado}</div>
-                            <div className="text-xs text-zinc-400">Total</div>
-                        </div>
-                    </div>
-                </Card>
+        <div className="min-h-screen bg-[#0F0A06] p-4 overflow-y-auto">
+            <div className="max-w-sm mx-auto space-y-4 pb-8">
+                {/* Marca */}
+                <div className="text-center pt-4 pb-2">
+                    <p className="text-amber-600/60 text-xs uppercase tracking-widest font-bold">☕ Ébano Café</p>
+                </div>
 
-                {/* Bebida favorita */}
-                {cliente.bebidaFavorita && (
-                    <Card className="p-4 bg-zinc-800/80 border-zinc-700 text-white">
-                        <p className="text-sm text-zinc-400">Tu bebida favorita</p>
-                        <p className="font-semibold">☕ {cliente.bebidaFavorita}</p>
-                    </Card>
-                )}
+                {/* Loyalty Card */}
+                <LoyaltyCard
+                    nombre={cliente.nombre}
+                    signo={cliente.signo}
+                    signoEmoji={SIGNO_EMOJI[cliente.signo] || '✨'}
+                    nivel={cliente.nivel}
+                    puntos={cliente.puntos}
+                    visitas={cliente.visitas}
+                    totalGastado={cliente.totalGastado}
+                    ultimaVisita={cliente.ultimaVisita}
+                    bebidaFavorita={cliente.bebidaFavorita}
+                />
 
                 {/* Botón hacer pedido */}
-                <Button className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-4 text-lg" onClick={cargarMenu}>
+                <Button
+                    className="w-full bg-amber-500 hover:bg-amber-600 active:scale-95 text-black font-black py-5 text-lg rounded-2xl shadow-lg shadow-amber-900/40 transition-all"
+                    onClick={cargarMenu}
+                >
                     🛒 Hacer mi pedido
                 </Button>
-
-                <p className="text-center text-xs text-zinc-500">Última visita: {cliente.ultimaVisita}</p>
             </div>
         </div>
     );
