@@ -3,7 +3,13 @@
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID!;
 
+// ── Token cache (evita llamar a Google OAuth en cada request) ────────────────
+let _cachedToken: string | null = null;
+let _tokenExpiry = 0;
+
 async function getAccessToken(): Promise<string> {
+    const now = Date.now();
+    if (_cachedToken && now < _tokenExpiry) return _cachedToken;
     const res = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -16,7 +22,9 @@ async function getAccessToken(): Promise<string> {
     });
     const data = await res.json();
     if (data.error) throw new Error(`Token error: ${data.error}`);
-    return data.access_token;
+    _cachedToken = data.access_token;
+    _tokenExpiry = now + 55 * 60 * 1000; // cache por 55 minutos
+    return _cachedToken!;
 }
 
 async function sheetsGet(range: string) {
@@ -190,7 +198,7 @@ export async function crearPedido(data: Omit<Pedido, 'fila'>) {
     ]]);
 }
 
-export async function actualizarEstadoPedido(fila: number, estado: 'Preparando' | 'Listo') {
+export async function actualizarEstadoPedido(fila: number, estado: 'Preparando' | 'Listo', fechaLocal?: string) {
     const now = new Date().toISOString();
     if (estado === 'Preparando') {
         // Solo actualizar Estado (G) y T.Preparando (I) — NO tocar T.Enviado (H)
@@ -203,16 +211,25 @@ export async function actualizarEstadoPedido(fila: number, estado: 'Preparando' 
         const tEnviado = new Date(row[7]);   // col H
         const tPreparando = new Date(row[8]); // col I
         const tListo = new Date(now);
-        const minEspera = ((tPreparando.getTime() - tEnviado.getTime()) / 60000).toFixed(1);
-        const minPrep = ((tListo.getTime() - tPreparando.getTime()) / 60000).toFixed(1);
-        const minTotal = ((tListo.getTime() - tEnviado.getTime()) / 60000).toFixed(1);
+
+        // Calcular tiempos (0 si no hay T.Preparando — skip directo a Listo)
+        const tPreparandoMs = tPreparando.getTime();
+        const tEnviadoMs = tEnviado.getTime();
+        const tListoMs = tListo.getTime();
+        const minEspera = tPreparandoMs > 0 && !isNaN(tPreparandoMs) && !isNaN(tEnviadoMs)
+            ? ((tPreparandoMs - tEnviadoMs) / 60000).toFixed(1) : '0';
+        const minPrep = tPreparandoMs > 0 && !isNaN(tPreparandoMs)
+            ? ((tListoMs - tPreparandoMs) / 60000).toFixed(1) : '0';
+        const minTotal = !isNaN(tEnviadoMs)
+            ? ((tListoMs - tEnviadoMs) / 60000).toFixed(1) : '0';
+
         await sheetsUpdate(`Pedidos!G${fila}:M${fila}`, [[
             'Listo', row[7], row[8], now, minEspera, minPrep, minTotal,
         ]]);
 
         // ── Escribir en Registros para que Flujo 10 actualice Clientes ──
-        // Estructura: Fecha | Nombre | Telefono | Tipo Cliente | Productos | Total ($)
-        const fecha = new Date().toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' });
+        // Usar fecha del cliente (timezone correcto); fallback al servidor
+        const fecha = fechaLocal || new Date().toLocaleDateString('es-MX');
         const nombre = row[1] || '';
         const telefono = row[2] || '';
         const nivel = row[3] || 'BASE';

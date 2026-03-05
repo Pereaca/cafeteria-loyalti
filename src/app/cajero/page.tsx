@@ -70,10 +70,11 @@ export default function CajeroPage() {
     async function cambiarEstado(fila: number, estado: 'Preparando' | 'Listo', id: string) {
         setActualizando(id);
         try {
+            const fechaLocal = new Date().toLocaleDateString('es-MX');
             await fetch('/api/pedidos', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fila, estado }),
+                body: JSON.stringify({ fila, estado, fechaLocal }),
             });
             await cargarPedidos();
         } finally {

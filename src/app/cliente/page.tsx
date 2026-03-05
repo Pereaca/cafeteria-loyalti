@@ -46,20 +46,26 @@ export default function ClientePage() {
     const [forma, setForma] = useState({ nombre: '', bebidaFavorita: '' });
     const [rawDate, setRawDate] = useState(''); // YYYY-MM-DD para el date picker
     const [cumpleanos, setCumpleanos] = useState(''); // DD/MM/YYYY guardado
+    const [error, setError] = useState('');
 
     // Buscar cliente por teléfono
     async function buscarCliente() {
         if (telefono.length < 10) return;
         setLoading(true);
+        setError('');
         try {
             const res = await fetch(`/api/clientes?telefono=${telefono}`);
+            if (!res.ok) throw new Error('Error de red');
             const data = await res.json();
+            if (data.error) throw new Error(data.error);
             if (data.cliente) {
                 setCliente(data.cliente);
                 setScreen('perfil');
             } else {
                 setScreen('registro');
             }
+        } catch (e) {
+            setError('Error al buscar cliente. ¿Hay conexión a internet?');
         } finally {
             setLoading(false);
         }
@@ -68,14 +74,18 @@ export default function ClientePage() {
     // Registrar cliente nuevo
     async function registrar() {
         if (!forma.nombre || !telefono) return;
+        if (!cumpleanos) { setError('Por favor ingresa tu fecha de cumpleaños'); return; }
         setLoading(true);
+        setError('');
         try {
             const res = await fetch('/api/clientes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...forma, cumpleanos, telefono }),
             });
+            if (!res.ok) throw new Error('Error de red');
             const data = await res.json();
+            if (data.error) throw new Error(data.error);
             if (data.ok) {
                 setCliente({
                     nombre: forma.nombre, telefono,
@@ -86,6 +96,8 @@ export default function ClientePage() {
                 });
                 setScreen('perfil');
             }
+        } catch (e) {
+            setError('Error al registrarse. Intenta de nuevo.');
         } finally {
             setLoading(false);
         }
@@ -104,6 +116,7 @@ export default function ClientePage() {
         const items = Object.entries(seleccion).filter(([, q]) => q > 0);
         if (!items.length || !cliente) return;
         setLoading(true);
+        setError('');
         try {
             const productos = items.map(([nombre, q]) => q > 1 ? `${q}x ${nombre}` : nombre).join(', ');
             const total = items.reduce((sum, [nombre, q]) => {
@@ -121,24 +134,30 @@ export default function ClientePage() {
                     notas, fecha: fechaLocal,
                 }),
             });
+            if (!res.ok) throw new Error('Error de red');
             const data = await res.json();
+            if (data.error) throw new Error(data.error);
             if (data.ok) {
                 setPedidoActual({ id: data.id, estado: 'Enviado', productos, tEnviado: new Date().toISOString() });
                 setScreen('seguimiento');
             }
+        } catch (e) {
+            setError('Error al enviar el pedido. Intenta de nuevo.');
         } finally {
             setLoading(false);
         }
     }
 
-    // Polling para seguimiento del pedido
+    // Polling para seguimiento del pedido — busca por ID incluyendo estado Listo
     useEffect(() => {
         if (screen !== 'seguimiento' || !pedidoActual) return;
+        if (pedidoActual.estado === 'Listo') return; // ya terminó, no seguir polling
         const interval = setInterval(async () => {
-            const res = await fetch('/api/pedidos');
-            const data = await res.json();
-            const p = data.pedidos?.find((x: { id: string }) => x.id === pedidoActual.id);
-            if (p) setPedidoActual(p);
+            try {
+                const res = await fetch(`/api/pedidos?id=${pedidoActual.id}`);
+                const data = await res.json();
+                if (data.pedido) setPedidoActual(data.pedido);
+            } catch { /* silencioso */ }
         }, 6000);
         return () => clearInterval(interval);
     }, [screen, pedidoActual]);
@@ -153,24 +172,27 @@ export default function ClientePage() {
 
     if (screen === 'telefono') return (
         <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center p-6">
-            <Card className="w-full max-w-sm p-8 bg-zinc-800/80 border-zinc-700 text-white">
-                <div className="text-center mb-8">
-                    <div className="text-5xl mb-3">☕</div>
-                    <h1 className="text-2xl font-bold">Bienvenido</h1>
-                    <p className="text-zinc-400 text-sm mt-1">Ingresa tu teléfono para continuar</p>
+            <div className="w-full max-w-sm">
+                <div className="bg-zinc-800/80 border border-zinc-700 rounded-2xl p-8 text-white">
+                    <div className="text-center mb-8">
+                        <div className="text-5xl mb-3">☕</div>
+                        <h1 className="text-2xl font-bold">Bienvenido</h1>
+                        <p className="text-zinc-400 text-sm mt-1">Ingresa tu teléfono para continuar</p>
+                    </div>
+                    <div className="space-y-4">
+                        <input
+                            type="tel" placeholder="Teléfono (10 dígitos)"
+                            value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            onKeyDown={e => e.key === 'Enter' && buscarCliente()}
+                            className="w-full bg-zinc-700 border border-zinc-600 rounded-lg px-4 py-3 text-center text-lg tracking-widest focus:outline-none focus:border-amber-400"
+                        />
+                        {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+                        <Button className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3" onClick={buscarCliente} disabled={loading || telefono.length < 10}>
+                            {loading ? 'Buscando...' : 'Continuar →'}
+                        </Button>
+                    </div>
                 </div>
-                <div className="space-y-4">
-                    <input
-                        type="tel" placeholder="Teléfono (10 dígitos)"
-                        value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        onKeyDown={e => e.key === 'Enter' && buscarCliente()}
-                        className="w-full bg-zinc-700 border border-zinc-600 rounded-lg px-4 py-3 text-center text-lg tracking-widest focus:outline-none focus:border-amber-400"
-                    />
-                    <Button className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3" onClick={buscarCliente} disabled={loading || telefono.length < 10}>
-                        {loading ? 'Buscando...' : 'Continuar →'}
-                    </Button>
-                </div>
-            </Card>
+            </div>
         </div>
     );
 
@@ -185,9 +207,9 @@ export default function ClientePage() {
                 <div className="space-y-3">
                     <input placeholder="Nombre completo" value={forma.nombre}
                         onChange={e => setForma(f => ({ ...f, nombre: e.target.value }))}
-                        className="w-full bg-zinc-700 border border-zinc-600 rounded-lg px-4 py-3 focus:outline-none focus:border-amber-400" />
+                        className="w-full bg-zinc-700 border border-zinc-600 rounded-lg px-4 py-3 focus:outline-none focus:border-amber-400 text-white" />
                     <div>
-                        <label className="text-xs text-zinc-400 mb-1 block">Fecha de cumpleaños</label>
+                        <label className="text-xs text-zinc-400 mb-1 block">Fecha de cumpleaños <span className="text-red-400">*</span></label>
                         <input
                             type="date"
                             value={rawDate}
@@ -206,7 +228,8 @@ export default function ClientePage() {
                     </div>
                     <input placeholder="Bebida favorita (opcional)" value={forma.bebidaFavorita}
                         onChange={e => setForma(f => ({ ...f, bebidaFavorita: e.target.value }))}
-                        className="w-full bg-zinc-700 border border-zinc-600 rounded-lg px-4 py-3 focus:outline-none focus:border-amber-400" />
+                        className="w-full bg-zinc-700 border border-zinc-600 rounded-lg px-4 py-3 focus:outline-none focus:border-amber-400 text-white" />
+                    {error && <p className="text-red-400 text-xs text-center">{error}</p>}
                     <Button className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 mt-2" onClick={registrar} disabled={loading || !forma.nombre}>
                         {loading ? 'Registrando...' : '✨ Registrarme'}
                     </Button>
