@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getPedidos, crearPedido, actualizarEstadoPedido } from '@/lib/sheets';
+import { getPedidos, crearPedido, actualizarEstadoPedido, getClienteByTel } from '@/lib/sheets';
 
 export async function GET(req: Request) {
     try {
@@ -28,7 +28,6 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'nombre y telefono requeridos' }, { status: 400 });
         }
         const id = `P${Date.now()}-${telefono.slice(-4)}`;
-        // Usar fecha del cliente (timezone correcto); fallback al servidor
         const fecha = fechaCliente || new Date().toLocaleDateString('es-MX');
         await crearPedido({ id, nombre, telefono, nivel, productos, totalEstimado, estado: 'Enviado', tEnviado: '', tPreparando: '', tListo: '', minEspera: 0, minPreparacion: 0, minTotal: 0, notas, fecha });
         return NextResponse.json({ ok: true, id });
@@ -47,7 +46,37 @@ export async function PATCH(req: Request) {
         if (estado !== 'Preparando' && estado !== 'Listo') {
             return NextResponse.json({ error: 'estado inválido' }, { status: 400 });
         }
-        await actualizarEstadoPedido(fila, estado, fechaLocal);
+
+        const pedidoData = await actualizarEstadoPedido(fila, estado, fechaLocal);
+
+        // ── Flujo 12: Enviar WhatsApp con horóscopo al marcar Listo ────
+        if (estado === 'Listo' && pedidoData?.telefono) {
+            const webhookUrl = process.env.WEBHOOK_PEDIDO_LISTO;
+            if (webhookUrl) {
+                // Buscar signo y puntos del cliente (async, no bloqueante)
+                (async () => {
+                    try {
+                        const cliente = await getClienteByTel(pedidoData.telefono!);
+                        const payload = {
+                            nombre: pedidoData.nombre || '',
+                            telefono: pedidoData.telefono || '',
+                            signo: cliente?.signo || 'Géminis',
+                            nivel: cliente?.nivel || pedidoData.nivel || 'BASE',
+                            puntos: cliente?.puntos || 0,
+                            productos: pedidoData.productos || '',
+                        };
+                        await fetch(webhookUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload),
+                        });
+                    } catch (err) {
+                        console.error('[Flujo 12] Error llamando webhook:', err);
+                    }
+                })();
+            }
+        }
+
         return NextResponse.json({ ok: true });
     } catch (e) {
         return NextResponse.json({ error: String(e) }, { status: 500 });

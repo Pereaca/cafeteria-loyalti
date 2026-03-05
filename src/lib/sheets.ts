@@ -198,12 +198,13 @@ export async function crearPedido(data: Omit<Pedido, 'fila'>) {
     ]]);
 }
 
-export async function actualizarEstadoPedido(fila: number, estado: 'Preparando' | 'Listo', fechaLocal?: string) {
+export async function actualizarEstadoPedido(fila: number, estado: 'Preparando' | 'Listo', fechaLocal?: string): Promise<{ nombre?: string; telefono?: string; nivel?: string; productos?: string } | null> {
     const now = new Date().toISOString();
     if (estado === 'Preparando') {
         // Solo actualizar Estado (G) y T.Preparando (I) — NO tocar T.Enviado (H)
         await sheetsUpdate(`Pedidos!G${fila}`, [['Preparando']]);
         await sheetsUpdate(`Pedidos!I${fila}`, [[now]]);
+        return null;
     } else {
         // Leer fila completa para calcular tiempos
         const data = await sheetsGet(`Pedidos!A${fila}:O${fila}`);
@@ -238,8 +239,13 @@ export async function actualizarEstadoPedido(fila: number, estado: 'Preparando' 
         await sheetsAppend('Registros!A:I', [[
             fecha, nombre, telefono, nivel, productos, total, '', '', '',
         ]]);
+
+        // Devolver datos del pedido para que la ruta PATCH pueda llamar al webhook
+        return { nombre, telefono, nivel, productos };
     }
 }
+
+
 
 
 export async function getMenu(): Promise<Producto[]> {
