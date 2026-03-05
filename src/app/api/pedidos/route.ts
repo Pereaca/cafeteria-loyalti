@@ -13,9 +13,10 @@ export async function GET() {
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { nombre, telefono, nivel, productos, totalEstimado, notas } = body;
+        const { nombre, telefono, nivel, productos, totalEstimado, notas, fecha: fechaCliente } = body;
         const id = `P${Date.now()}-${telefono.slice(-4)}`;
-        const fecha = new Date().toLocaleDateString('es-MX');
+        // Usar fecha del cliente (timezone correcto); fallback al server
+        const fecha = fechaCliente || new Date().toLocaleDateString('es-MX');
         await crearPedido({ id, nombre, telefono, nivel, productos, totalEstimado, estado: 'Enviado', tEnviado: '', tPreparando: '', tListo: '', minEspera: 0, minPreparacion: 0, minTotal: 0, notas, fecha });
         return NextResponse.json({ ok: true, id });
     } catch (e) {
