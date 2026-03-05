@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { LoyaltyCard } from '@/components/ui/loyalty-card';
+import { OtpInput } from '@/components/ui/otp-input';
 
 type Cliente = {
     nombre: string;
@@ -26,7 +27,7 @@ const SIGNO_EMOJI: Record<string, string> = {
     'Libra': '♎', 'Escorpio': '♏', 'Sagitario': '♐', 'Capricornio': '♑', 'Acuario': '♒', 'Piscis': '♓',
 };
 
-type Screen = 'telefono' | 'registro' | 'perfil' | 'pedido' | 'seguimiento';
+type Screen = 'telefono' | 'otp' | 'registro' | 'perfil' | 'pedido' | 'seguimiento';
 
 export default function ClientePage() {
     const [screen, setScreen] = useState<Screen>('telefono');
@@ -38,31 +39,72 @@ export default function ClientePage() {
     const [pedidoActual, setPedidoActual] = useState<Pedido | null>(null);
     const [loading, setLoading] = useState(false);
     const [forma, setForma] = useState({ nombre: '', bebidaFavorita: '' });
-    const [rawDate, setRawDate] = useState(''); // YYYY-MM-DD para el date picker
-    const [cumpleanos, setCumpleanos] = useState(''); // DD/MM/YYYY guardado
+    const [rawDate, setRawDate] = useState('');
+    const [cumpleanos, setCumpleanos] = useState('');
     const [error, setError] = useState('');
+    const [otpError, setOtpError] = useState('');
 
-    // Buscar cliente por teléfono
+    // Paso 1: Enviar OTP por WhatsApp
     async function buscarCliente() {
         if (telefono.length < 10) return;
         setLoading(true);
         setError('');
         try {
-            const res = await fetch(`/api/clientes?telefono=${telefono}`);
-            if (!res.ok) throw new Error('Error de red');
+            const res = await fetch('/api/otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'send', telefono }),
+            });
             const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            if (data.cliente) {
-                setCliente(data.cliente);
+            if (!res.ok) throw new Error(data.error || 'Error al enviar código');
+            setScreen('otp');
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : 'Error al enviar código. ¿Hay conexión?');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // Paso 2: Verificar OTP y cargar cliente
+    async function verifyOtp(code: string) {
+        setLoading(true);
+        setOtpError('');
+        try {
+            // Verify code
+            const vRes = await fetch('/api/otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'verify', telefono, code }),
+            });
+            const vData = await vRes.json();
+            if (!vRes.ok) throw new Error(vData.error || 'Código incorrecto');
+
+            // Now look up client
+            const cRes = await fetch(`/api/clientes?telefono=${telefono}`);
+            if (!cRes.ok) throw new Error('Error de red');
+            const cData = await cRes.json();
+            if (cData.cliente) {
+                setCliente(cData.cliente);
                 setScreen('perfil');
             } else {
                 setScreen('registro');
             }
-        } catch (e) {
-            setError('Error al buscar cliente. ¿Hay conexión a internet?');
+        } catch (e: unknown) {
+            setOtpError(e instanceof Error ? e.message : 'Código incorrecto');
         } finally {
             setLoading(false);
         }
+    }
+
+    // Reenviar OTP
+    async function resendOtp() {
+        try {
+            await fetch('/api/otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'send', telefono }),
+            });
+        } catch { }
     }
 
     // Registrar cliente nuevo
@@ -182,12 +224,22 @@ export default function ClientePage() {
                         />
                         {error && <p className="text-red-400 text-xs text-center">{error}</p>}
                         <Button className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3" onClick={buscarCliente} disabled={loading || telefono.length < 10}>
-                            {loading ? 'Buscando...' : 'Continuar →'}
+                            {loading ? 'Enviando código...' : 'Enviar código por WhatsApp →'}
                         </Button>
                     </div>
                 </div>
             </div>
         </div>
+    );
+
+    if (screen === 'otp') return (
+        <OtpInput
+            telefono={telefono}
+            onComplete={verifyOtp}
+            onResend={resendOtp}
+            loading={loading}
+            error={otpError}
+        />
     );
 
     if (screen === 'registro') return (
